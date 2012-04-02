@@ -6,6 +6,8 @@ def main():
 
     username=raw_input('User name: ')
     password = getpass('Password : ')
-
+    
     pm.login(username, password)
-    pm.update()
+    albums = pm.all_photosets()
+    for album in albums:
+        photos = album.import_photos()

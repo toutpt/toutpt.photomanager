@@ -2,31 +2,9 @@ from zope import component
 from zope import interface
 from toutpt.photomanager import interfaces
 from toutpt.photomanager import core
+from toutpt.photomanager.logger import logger
 import gdata.photos, gdata.photos.service
 
-import logging
-logger = logging.getLogger('picasaweb')
-logger.setLevel(logging.DEBUG)
-ch = logging.StreamHandler()
-ch.setLevel(logging.DEBUG)
-
-# create formatter
-formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-
-# add formatter to ch
-ch.setFormatter(formatter)
-
-# add ch to logger
-logger.addHandler(ch)
-
-  # Get all photos in second album
-#  photos = pws.GetFeed(albums[1].GetPhotosUri()).entry
-  # Get all tags for photos in second album and print them
-#  tags = pws.GetFeed(albums[1].GetTagsUri()).entry
-#  print [ tag.summary.text for tag in tags ]
-  # Get all comments for the first photos in list and print them
-#  comments = pws.GetCommentFeed(photos[0].GetCommentsUri()).entry
-#  print [ c.summary.text for c in comments ]
 
 class PicasawebPhotoSet(core.PhotoSet):
     
@@ -34,9 +12,14 @@ class PicasawebPhotoSet(core.PhotoSet):
         super(PicasawebPhotoSet,self).__init__()
         self.pws = None
         self.raw_album = None
+        self._photos = []
 
-    def update(self):
-        self.uri = self.raw_album.GetAlternateLink().href
+
+    def get_photos(self):
+        if self._photos:
+            return self._photos
+
+        photos = []
         raw_photos = self.pws.GetFeed(self.raw_album.GetPhotosUri()).entry
         for raw_photo in raw_photos:
             photo = core.Photo()
@@ -44,10 +27,19 @@ class PicasawebPhotoSet(core.PhotoSet):
             photo.uri = raw_photo.content.src
             photo.title = raw_photo.title.text
             photo.description = raw_photo.summary.text or ''
-            tags = self.pws.GetFeed(raw_photo.GetTagsUri()).entry
-            photo.tags = [tag.summary.text for tag in tags]
+#            tags = self.pws.GetFeed(raw_photo.GetTagsUri()).entry
+#            photo.tags = [tag.summary.text for tag in tags]
+            photos.append(photo)
+
+        self.add_photos(photos)
 
         logger.info('%s photos found in %s'%(len(raw_photos), self.uri))
+
+        return self._photos
+    
+    def update(self):
+        self.uri = self.raw_album.GetAlternateLink().href
+        self.title = self.raw_album.title.text
 
 
 class PicasawebPhotoManager(object):
@@ -61,6 +53,7 @@ class PicasawebPhotoManager(object):
 
     def get_photoset(self, uri):
         """REturn a IPhotoSet"""
+        self.update()
         return self._uris.get(uri, None)
 
     def new_photoset(self):
@@ -69,7 +62,23 @@ class PicasawebPhotoManager(object):
 
     def all_photosets(self):
         """Return a set of all registred albums"""
+        self.update()
         return self._uris.values()
+
+    def update(self):
+        if self._uris:
+            return self._uris
+
+        logger.info('load albums')
+        raw_albums = self.pws.GetUserFeed().entry
+        for raw_album in raw_albums:
+            album = self.new_photoset()
+            album.raw_album = raw_album
+            album.pws = self.pws
+            album.update()
+            self.add_photoset(album)
+        
+        logger.info('%s albums loaded'%len(self._uris))
 
     def add_photoset(self, photoset):
         """register an album"""
@@ -83,18 +92,3 @@ class PicasawebPhotoManager(object):
         logger.info('login')
         self.pws.ClientLogin(username, password)
         logger.info('logged in')
-
-    def update(self):
-        logger.info('get all albums')
-        #load albums
-        raw_albums = self.pws.GetUserFeed().entry
-        for raw_album in raw_albums:
-            logger.info('load album %s'%raw_album.GetAlternateLink().href)
-            album = self.new_photoset()
-            album.raw_album = raw_album
-            album.pws = self.pws
-            album.update()
-
-        logger.info('%s albums found'%len(raw_albums))
-
-
