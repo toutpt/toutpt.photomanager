@@ -10,4 +10,4 @@ def main():
     pm.login(username, password)
     albums = pm.all_photosets()
     for album in albums:
-        photos = album.import_photos()
+        album.import_photos()

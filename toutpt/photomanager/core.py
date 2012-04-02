@@ -46,11 +46,17 @@ class PhotoSet(object):
         photos = self.get_photos()
         if not self.title:
             raise ValueError('photo set must have a title')
-        os.mkdir(self.title)
         cwd = os.getcwd()
-        albumpath = '%s/%s'%(cwd,self.title)
+        album_path = '%s/%s'%(cwd,self.title)
+        if not os.path.exists(album_path):
+            os.mkdir(album_path)
+        elif not os.path.isdir(album_path):
+            raise Exception("%s is not a folder"%album_path)
         for photo in photos:
+            photo_path = '%s/%s'%(album_path, photo.title)
+            if os.path.isfile(photo_path):
+                continue
             logger.info('start download %s'%photo.title)
             urllib.urlretrieve(photo.uri,
-                               '%s/%s'%(albumpath, photo.title))
+                               photo_path)
             logger.info('%s downloaded'%photo.title)
